@@ -1,0 +1,10 @@
+Here is a paragraph which langchain will try to seperate from the next
+
+Here is the next paragraph
+
+Heres a super long paragraph, extending the 100 char limit.
+This is still part of the same paragraph only we have moved onto a new line.
+
+Heres is a sentence thats longer than 100 characters, therefore langchain should seperate it based on spaces
+
+seeeeeeeeepppppppppeeeeeeeerrrrrrrrrraaaaaaaattttttttteeeeeeeeeeeeooooonnnnnnnccccccchhhhhhhhhaaaaaaaaaarrraaaaaacccterslastresort

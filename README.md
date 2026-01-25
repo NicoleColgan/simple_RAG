@@ -173,6 +173,47 @@ Instead, use:
 * File-level or semantic splitting
 * Chunking code by characters destroys structure and meaning
 
+---
+
+### Chunk Metadata & ID Strategy
+
+Each chunk is stored with the following metadata:
+
+```python
+{
+    "id": "<deterministic-hash>",
+    "data": "<chunk-text>",
+    "file_name": "<source-filename>",
+    "content_type": "<mime-type>"
+}
+```
+
+#### Why Deterministic Hash IDs?
+
+**Hash-based ID generation:**
+```python
+hashlib.sha256(f"{file_name}-{chunk}".encode("utf-8")).hexdigest()
+```
+
+**Advantages over UUID:**
+- ✅ **Deduplication**: Same content = same ID, making it easy to detect and skip duplicate chunks
+- ✅ **Deterministic**: Re-ingesting the same file produces identical IDs
+- ✅ **Idempotent**: Safe to re-run ingestion without creating duplicates in the vector DB
+- ✅ **Content-addressable**: ID represents the actual content, not just a random identifier
+
+**UUID approach (NOT used):**
+```python
+str(uuid.uuid4())  # Random ID every time
+```
+- ❌ **No deduplication**: Same chunk ingested twice = two different IDs
+- ❌ **Database bloat**: Duplicate content creates redundant vectors
+- ❌ **Wasted storage**: Same embeddings stored multiple times
+
+**Use case:**
+If you upload the same document twice, the hash-based approach allows your vector DB to recognize and skip duplicates, saving storage and preventing retrieval confusion.
+
+---
+
 #### Learnings
 1. **FastAPI File Uploads**
     * `UploadFile`

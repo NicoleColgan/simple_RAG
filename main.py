@@ -7,6 +7,7 @@ import logging
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import io
 from pypdf import PdfReader
+import hashlib
 
 # Configure logging
 logging.basicConfig(
@@ -21,6 +22,7 @@ app = FastAPI()
 class IngestResponse(BaseModel):
     files_processed: int
     filenames: list[str]
+    chunks: list[dict]
 
 @app.get("/")
 def default():
@@ -63,18 +65,26 @@ async def ingest(files: list[UploadFile] = File(...)):
                 text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
             
             if text_content and text_splitter:
-                res = text_splitter.split_text(text_content)
-                print(f"\nres=\n{res}\n")
+                chunk_content = text_splitter.split_text(text_content)  # always returns a list
+                for chunk in chunk_content:
+                    all_chunks.append({
+                        "id": hashlib.sha256(f"{file_name}-{chunk}".encode("utf-8")).hexdigest(),
+                        "data": chunk,
+                        "file_name": file_name,
+                        "content_type": file.content_type or ""
+                    })
                 processed_files.append(file.filename)
 
         except Exception as e:
             logger.error(f"failed to process {file.filename}: {e}")
         
         # TODO: send chunks to embedding + vector db
+        # attach metadata to chunks
 
     return IngestResponse(
         files_processed=len(processed_files),
-        filenames=processed_files
+        filenames=processed_files,
+        chunks=all_chunks
     )
 
 @app.post("/query")

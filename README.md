@@ -260,3 +260,111 @@ If you upload the same document twice, the hash-based approach allows your vecto
           still exceeds `chunk_size` after separator-based splitting.
         * In practice, this means overlap usually appears only for word-level or
           character-level splits, not for paragraph or line splits.
+
+
+---
+
+## Google Cloud Storage Setup
+
+### Project Configuration
+- **Project ID**: `simple-rag-485411`
+- **Service Account**: `simple-rag-service-account@simple-rag-485411.iam.gserviceaccount.com`
+- **Region**: `europe-west1` (Belgium - closest to Ireland)
+- **Bucket Name**: `simple-rag-bucket`
+
+---
+
+### Setup Steps
+
+#### 1. Create GCP Project
+In GCP, everything lives in a **project** - a container for all your resources (buckets, VMs, APIs, etc.).
+
+1. Go to https://console.cloud.google.com/
+2. Create a new project and name it `simple-RAG`
+3. Note the auto-generated project ID: `simple-rag-485411`
+4. Always ensure this project is selected in the top dropdown when working
+
+#### 2. Enable Cloud Storage API
+Your project needs permission to use Google Cloud Storage:
+
+1. Go to **APIs & Services** → **Enable APIs and Services**
+2. Search for "Cloud Storage API"
+3. Click **Enable**
+
+#### 3. Create Service Account (for programmatic access)
+Your Python code needs credentials to access GCS securely:
+
+1. Go to **IAM & Admin** → **Service Accounts**
+2. Click **Create Service Account**
+3. Name: `simple-rag-service-account`
+4. Grant role: **Storage Object Admin** (allows upload/download/delete objects)
+5. Click **Create and Continue** → **Done**
+6. Click on the service account → **Keys** tab → **Add Key** → **Create New Key**
+7. Choose **JSON** format → Download the key file
+8. Save it as `rag-service-account.json` in your project root
+
+**🚨 SECURITY WARNING:**
+- ❌ **NEVER commit `rag-service-account.json` to GitHub** - it contains private credentials
+- Add to `.gitignore` immediately:
+  ```gitignore
+  rag-service-account.json
+  *.json
+  ```
+- In production, use **Secret Manager** or environment variables instead of local JSON files
+
+#### 4. Create Storage Bucket
+Buckets are where files are stored. 
+
+**Via Console (Recommended for first time)**
+1. Go to **Cloud Storage** → **Buckets** → **Create Bucket**
+2. **Name**: `simple-rag-bucket` (include project ID for uniqueness)
+3. **Location type**: Region
+4. **Region**: `europe-west1`
+5. **Storage class**: Standard (frequent access)
+6. **Access control**: Uniform (IAM only)
+7. **Public access**: Enforce prevention (keep private)
+8. **Soft delete**: Use default (7 days)
+9. **Object versioning**: Disabled
+10. Click **Create**
+
+#### 5. Install Google Cloud Storage Client Library
+```bash
+pip install google-cloud-storage
+```
+
+---
+
+### Code Implementation
+
+#### Authentication Setup
+```python
+import os
+from google.cloud import storage
+
+# Point to your service account key (local development only)
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "rag-service-account.json"
+
+# Initialize GCS client
+client = storage.Client()
+bucket_name = "simple-rag-bucket"
+bucket = client.bucket(bucket_name)
+```
+
+#### Uploading Files
+```python
+# Upload file to GCS
+blob = bucket.blob(file_name)  # Create a blob reference
+blob.upload_from_string(content)  # Upload bytes
+gcs_uri = f"gs://{bucket_name}/{file_name}"  # GCS path
+```
+
+**What is a Blob?**
+- **Blob** = Binary Large Object = GCS term for a file/object stored in a bucket
+- Think of it as: **Bucket = Folder**, **Blob = File**
+- `bucket.blob(file_name)` creates a reference to a file location (doesn't upload yet)
+- `blob.upload_from_string(content)` actually uploads the bytes to GCS
+
+**GCS URI Format:**
+- Format: `gs://bucket-name/file-name`
+- Example: `gs://simple-rag-485411-documents/document.pdf`
+- This URI is stored in chunk metadata for traceability

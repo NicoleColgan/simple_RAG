@@ -4,3 +4,4 @@ langchain-text-splitters==1.1.0
 uvicorn==0.34.0
 python-multipart==0.0.21
 pypdf==6.6.0
+google-cloud-storage==3.8.0

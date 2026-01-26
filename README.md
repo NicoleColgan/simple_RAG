@@ -266,6 +266,11 @@ If you upload the same document twice, the hash-based approach allows your vecto
 
 ## Google Cloud Storage Setup
 
+### Why Use GCS?
+When users upload files via your API, you need persistent storage to access them later. The vector database only stores embeddings for similarity search - you still need the original documents to show users where answers came from, prove what data generated responses (compliance/audit), and enable features like file downloads.
+
+Additionally, storing source files in GCS allows you to reprocess your entire corpus when you improve chunking strategies or switch embedding models, debug issues by comparing chunks to original documents, and recover from disasters if your vector DB crashes. While technically optional, GCS provides critical benefits for production RAG systems at minimal cost (~€0.02/GB/month)
+
 ### Project Configuration
 - **Project ID**: `simple-rag-485411`
 - **Service Account**: `simple-rag-service-account@simple-rag-485411.iam.gserviceaccount.com`

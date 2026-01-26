@@ -7,6 +7,13 @@ import logging
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import io
 from pypdf import PdfReader
+import hashlib
+from google.cloud import storage
+import os
+
+# Set service account key path
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "rag-service-account.json"
+
 
 # Configure logging
 logging.basicConfig(
@@ -16,11 +23,22 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Initialise gcs client
+client = storage.Client()
+bucket_name = "simple-rag-bucket"
+try:
+    bucket = client.get_bucket(bucket_name)
+    logger.info(f"Using existing bucket: {bucket_name}")
+except Exception:
+    logger.info("error accessing bucket")
+
+
 app = FastAPI()
 
 class IngestResponse(BaseModel):
     files_processed: int
     filenames: list[str]
+    chunks: list[dict]
 
 @app.get("/")
 def default():
@@ -43,13 +61,20 @@ async def ingest(files: list[UploadFile] = File(...)):
 
     for file in files:
         try:
+            # 
+            # should we check if content it not null before continuing
+            # 
             content = await file.read()
             text_content = ""
             file_name = (file.filename or "").lower()
             text_splitter = None
 
-            if file_name.endswith(".pdf"):    # Fallback incase content_type is wrong
-                # Handle pdf
+            # Upload raw files to gcs
+            blob = bucket.blob(file_name)
+            blob.upload_from_string(content)    # works with bytes
+            gcs_uri = f"gs://{bucket_name}/{file_name}"
+
+            if file_name.endswith(".pdf"): 
                 pdf_file = io.BytesIO(content)  # Create file-like stream object
                 pdf_reader = PdfReader(pdf_file)    # parse pdf files from stream
                 for page in pdf_reader.pages:
@@ -58,23 +83,31 @@ async def ingest(files: list[UploadFile] = File(...)):
                 text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
 
             elif file_name.endswith(".txt"):
-                # why did they check content type exists here but not above
                 text_content = content.decode("utf-8")
                 text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
             
             if text_content and text_splitter:
-                res = text_splitter.split_text(text_content)
-                print(f"\nres=\n{res}\n")
+                chunk_content = text_splitter.split_text(text_content)  # always returns a list
+                for chunk in chunk_content:
+                    all_chunks.append({
+                        "id": hashlib.sha256(f"{file_name}-{chunk}".encode("utf-8")).hexdigest(),
+                        "data": chunk,
+                        "file_name": file_name,
+                        "content_type": file.content_type or "",
+                        "gcs_uri": gcs_uri
+                    })
                 processed_files.append(file.filename)
 
         except Exception as e:
             logger.error(f"failed to process {file.filename}: {e}")
         
         # TODO: send chunks to embedding + vector db
+        # attach metadata to chunks
 
     return IngestResponse(
         files_processed=len(processed_files),
-        filenames=processed_files
+        filenames=processed_files,
+        chunks=all_chunks
     )
 
 @app.post("/query")

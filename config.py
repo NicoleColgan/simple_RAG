@@ -32,4 +32,4 @@ TXT_CHUNK_OVERLAP = 50
 
 # Logging
 LOGGING_LEVEL = "INFO"
-lOG_format = '%(asctime)s - %(name)s %(levelname)s %(message)s'
+lOG_FORMAT = '%(asctime)s - %(name)s %(levelname)s %(message)s'

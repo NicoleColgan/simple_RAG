@@ -6,6 +6,7 @@ class IngestResponse(BaseModel):
     filenames: list[str]
     chunks_ingested: int
     chunks: list[dict]
+    error_msg: str | None
 
 class QueryRequest(BaseModel):
     query: str

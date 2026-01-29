@@ -7,12 +7,16 @@ logger = logging.getLogger(__name__)
 
 class VectorStore:
     def __init__(self):
-        self.pinecone_client = Pinecone(PINECONE_API_KEY)
-        self.ensure_index_exists()
-        self.index = self.pinecone_client.Index(PINECONE_INDEX_NAME)
-        logger.info(f"Connected to pinecone index: {PINECONE_INDEX_NAME}")
+        try:
+            self.pinecone_client = Pinecone(PINECONE_API_KEY)
+            self._ensure_index_exists()
+            self.index = self.pinecone_client.Index(PINECONE_INDEX_NAME)
+            logger.info(f"Connected to pinecone index: {PINECONE_INDEX_NAME}")
+        except Exception as e:
+            logger.error(f"Failed to connect to Pinecone: {e}", exc_info=True)
+            raise   # should fail without pinecone
     
-    def ensure_index_exists(self):
+    def _ensure_index_exists(self):
         if not self.pinecone_client.has_index(PINECONE_INDEX_NAME):
             self.pinecone_client.create_index(
                 name=PINECONE_INDEX_NAME,
@@ -22,15 +26,24 @@ class VectorStore:
             )
 
     def upload_to_pinecone(self, vectors):
-        self.index.upsert(vectors=vectors)
-        logger.info("vectors uploaded to Pinecone db")
+        try:
+            self.index.upsert(vectors=vectors)
+            logger.info("vectors uploaded to Pinecone db")
+        except Exception as e:
+            logger.error(f"Failed to upload embeddings to Pinecone: {e}", exc_info=True)
+            raise
 
     def filter_existing_vectors(self, chunks):
-        ids = [chunk["id"] for chunk in chunks]
-        existing_chunks = self.index.fetch(ids=ids)
-        logger.info(f"chunks already in pincone: {existing_chunks.get("vectors", {})}")
-        return [chunk for chunk in chunks if chunk["id"] not in existing_chunks.get("vectors", {})] # will this return [] and be fine if filter all out?
-
+        try:
+            ids = [chunk["id"] for chunk in chunks]
+            existing_chunks = self.index.fetch(ids=ids)
+            if existing_chunks.get("vectors", None):
+                logger.info(f"chunks already in pincone: {existing_chunks["vectors"].keys()}")  #tesssssssssst
+            return [chunk for chunk in chunks if chunk["id"] not in existing_chunks.get("vectors", {})] 
+        except Exception as e:
+            logger.warning(f"Failed to fetch existing vectors from pinecone: {e}")
+            return chunks
+    
     #  def query(self, query_vector: list[float], top_k: int = 5) -> list[dict]:
     #     """Query Pinecone for similar vectors"""
     #     results = self.index.query(

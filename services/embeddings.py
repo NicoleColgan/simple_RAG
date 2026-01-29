@@ -27,7 +27,7 @@ class Embeddings:
 
             # Batch embeddings calls
             try:
-                embeddings = self.embedding_model.get_embeddings(texts)
+                text_embeddings = self.embedding_model.get_embeddings(texts)
             except Exception as e:
                 logger.error(f"Failed to embed batch {i//EMBEDDING_BATCH_SIZE + 1}: {e}", exc_info=True)
                 raise   # dont want partial documents stored
@@ -35,10 +35,10 @@ class Embeddings:
             # prepare chunks for pinecone
             for j, chunk in enumerate(batch):
                 embeddings.append({
-                    "id": chunk["id"],  # will any of these values ever be empty
-                    "values": embeddings[j].values,  # actual embeddings vector
+                    "id": chunk["id"],
+                    "values": text_embeddings[j].values,  # actual embeddings vector
                     "metadata": {
-                        "text": chunk["data"], #?
+                        "text": chunk["data"],
                         "filename": chunk["filename"],
                         "gcs_uri": chunk["gcs_uri"]
                     }

@@ -23,9 +23,12 @@ class StorageService:
     def upload_file(self, filename: str, content: bytes):
         try:
             blob = self.gcs_bucket.blob(filename)
+            if blob.exists():
+                logger.info(f"File: {filename} already stored in gcs")
+                return f"gs://{self.gcs_bucket_name}/{filename}"
+            
             blob.upload_from_string(content)    # works with bytes
             gcs_uri = f"gs://{self.gcs_bucket_name}/{filename}"
-
             logger.info(f"file {filename} uploaded to GCS")
             return gcs_uri
         except Exception as e:

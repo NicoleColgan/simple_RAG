@@ -85,11 +85,14 @@ async def ingest(files: list[UploadFile] = File(...)):
     )
 
 @app.post("/query")
-async def query(query_request: QueryRequest):
-    # do i still need below since im using pydantic model
-    if not query_request or not query_request.strip():
-        logger.error("user query empty")
-        raise HTTPException(status_code=400, detail="Query cannot be empty")
+def query(query_request: QueryRequest):
+    # convert query to embedding
+    vector = embeddings.get_single_embedding(query_request.query)
+
+    # search pinecone for similar items
+    similar = vectorstore.get_similar(vector, query_request.metadata_filter)
+    
+    # return answers, sources, confidence
     return QueryResponse(
-        response=query_request.query
+        response=similar
     )

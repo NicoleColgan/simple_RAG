@@ -1,5 +1,6 @@
 """Pydantic models for request/response validation"""
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
+from typing import Annotated, Literal
 
 class IngestResponse(BaseModel):
     files_processed: int
@@ -8,8 +9,14 @@ class IngestResponse(BaseModel):
     chunks: list[dict]
     error_msg: str | None
 
+class MetaDataFilter(BaseModel):
+    key: Literal['text', 'filename', 'gcs_uri']
+    operation: Literal['eq', 'ne']    # restrict to exact values
+    value: str
+
 class QueryRequest(BaseModel):
-    query: str
+    query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    metadata_filter: MetaDataFilter | None = None
 
 class QueryResponse(BaseModel):
     response: str

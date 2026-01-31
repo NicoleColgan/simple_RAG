@@ -1,7 +1,8 @@
 """
 Simple RAG API with endpoints for document ingestion, health checks, and querying
 """
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import StreamingResponse
 import logging
 from services.storage import StorageService
 from models import IngestResponse, QueryRequest, QueryResponse
@@ -91,8 +92,34 @@ def query(query_request: QueryRequest):
 
     # search pinecone for similar items
     similar = vectorstore.get_similar(vector, query_request.metadata_filter)
+
+    if not similar:
+        return QueryResponse(
+            response="I dont have the context to answer that",
+            sources=[],
+            confidence=0.0
+        )
     
-    # return answers, sources, confidence
-    return QueryResponse(
-        response=similar
-    )
+    answer = embeddings.get_answer(similar, query_request.query)
+
+    return QueryResponse(**answer)
+
+@app.post("/query_stream")
+def streamed_query(query_request: QueryRequest):
+    vector = embeddings.get_single_embedding(query_request.query)
+
+    similar = vectorstore.get_similar(vector, query_request.metadata_filter)
+
+    if not similar:
+        return QueryResponse(
+            response="I dont have the context to answer that",
+            sources=[],
+            confidence=0.0
+        )
+
+    def stream_generator():
+        for chunk in embeddings.get_answer(similar, query_request.query, stream=True):
+            if chunk.text:
+                yield chunk.text   
+
+    return StreamingResponse(stream_generator(), media_type="text/event-stream") 

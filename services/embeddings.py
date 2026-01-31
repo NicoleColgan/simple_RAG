@@ -1,8 +1,11 @@
 """VertexAI embeddings"""
-from config import EMBEDDING_BATCH_SIZE, EMBEDDING_MODEL, GCP_PROJECT_ID, GCP_LOCATION
+from config import EMBEDDING_BATCH_SIZE, EMBEDDING_MODEL, GCP_PROJECT_ID, GCP_LOCATION, LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_OUTPUT_TOKENS
 from vertexai.language_models import TextEmbeddingModel
 from google.cloud import aiplatform
 import logging
+from vertexai.generative_models import GenerativeModel, GenerationConfig
+from services.prompts import construct_system_prompt, RESPONSE_SCHEMA
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +14,7 @@ class Embeddings:
         try:
             aiplatform.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)  # set up vertexai client
             self.embedding_model = TextEmbeddingModel.from_pretrained(EMBEDDING_MODEL)
+            self.llm = GenerativeModel(LLM_MODEL)
             logger.info("VertexAI initialised")
         except Exception as e:
             logger.error(f"Failed to initialise VertexAI: {e}", exc_info=True)
@@ -47,3 +51,34 @@ class Embeddings:
             logger.info(f"Embedded batch {i//EMBEDDING_BATCH_SIZE + 1}: {len(batch)} chunks")
 
         return embeddings
+    
+    def get_single_embedding(self, text: str):
+        """Get embedding for a single text (e.g., user query)"""
+        try:
+            embeddings = self.embedding_model.get_embeddings([text])  # Expects a list
+            return embeddings[0].values  # Return the 768-dim vector
+        except Exception as e:
+            logger.error(f"Failed to create embedding from text: {text}: {e}", exc_info=True)
+            raise
+
+    def get_answer(self, context: list[dict], user_query: str, stream: bool = False):
+        try:
+            response = self.llm.generate_content(
+                contents=construct_system_prompt(user_query,context),
+                generation_config=GenerationConfig( # https://docs.cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/v1beta1/GenerationConfig
+                    response_mime_type="application/json",
+                    response_schema=RESPONSE_SCHEMA,
+                    temperature=LLM_TEMPERATURE,
+                    max_output_tokens=LLM_MAX_OUTPUT_TOKENS
+                ),
+                stream=stream
+            )
+            if stream:
+                return response # generator for streaming
+            return json.loads(response.text)
+        except json.JSONDecodeError as json_decode_error:
+            logger.error(f"Error decoding json from model response: {json_decode_error}", exc_info=True)
+            raise
+        except Exception as e:
+            logger.error(f"Error getting response from LLM: {e}", exc_info=True)
+            raise

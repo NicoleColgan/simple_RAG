@@ -462,6 +462,30 @@ services/
 - Reusable components across endpoints
 - Simplified main.py endpoint logic
 
+--
+
+## Containerisation
+```cmd
+docker build -t "simple-rag" .    
+docker run --rm -p 8000:8000 -v "${PWD}/rag-service-account.json:/app/rag-service-account.json:ro" --env-file .env simple-rag:latest
+```
+Mount the service key as read-only and inject the env file at runtime. This keeps our secrets completely out of the image so they can't be leaked or stolen if the image is shared
+
+### Docker Architecture & Security
+
+- **Multi-stage Build:** We use a multi-stage build for efficiency and security. Think of each stage as a temporary "mini-computer" that exists only to do its specific task. When we hit a new `FROM` statement, the previous computer shuts down, but Docker lets us reach back into its "hard drive" to grab only the finished files we need. This keeps the final image tiny and removes build tools (compilers, etc.) that aren't needed in production.
+- **Hardened Base Images:** We use `dhi.io/python:3-debian12-dev` for building and `dhi.io/python:3-debian12` for running. 
+    - **Debian 12** is the current stable standard, ensuring high compatibility for Python libraries.
+    - **Hardened Images** are pre-scanned to have nearly zero security vulnerabilities (CVEs).
+    - The **-dev** version has the "muscles" (compilers/pip) needed to install libraries as the root user, while the final image is locked down for safety.
+- **Dependency Optimization:** We use the `--user` flag to install libraries into a specific "suitcase" folder (`.local`) that is easy to move between stages. We use `--no-cache-dir` to keep the build stage small. 
+    > **Does this matter in multi-stage?** Yes! Even though the builder stage is thrown away, a smaller builder stage makes the build process faster, uses less RAM, and saves disk space on your laptop or CI/CD server while it's working.
+- **Clean Runtime Environment:** The final stage uses a fresh `/app` directory and runs as a restricted `nonroot` user. This means even if the app is compromised, the attacker has no "Admin" rights and no shell access.
+- **Path Mapping:** Because we "teleported" our libraries to a non-standard directory (`/home/nonroot/.local`), we use `ENV PATH` to tell Python where to find them. The `$PATH` part ensures we add to the search list rather than replacing it.
+- **Network Binding:** We run Uvicorn with `--host 0.0.0.0`. 
+    - **Why?** Inside a container, `127.0.0.1` means "listen only to myself." `0.0.0.0` is a "catch-all" that tells the container to accept requests from the outside (your computer).
+- **Fixed Port Mapping:** We explicitly lock Uvicorn to `--port 8000`. This ensures that our `docker run -p 8000:8000` command always has a reliable "bridge" to the app inside.
+
 ## Key Learnings
 
 ### FastAPI File Uploads

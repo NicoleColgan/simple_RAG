@@ -1,1 +1,1 @@
-from . import storage, document_processor, embeddings, vectorstore
+from . import storage, document_processor, embeddings, vectorstore, prompts

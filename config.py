@@ -23,6 +23,10 @@ PINECONE_METRIC = "cosine"
 # Vertex ai config
 EMBEDDING_MODEL = "text-embedding-004"
 EMBEDDING_BATCH_SIZE = 5
+LLM_MODEL = "gemini-2.5-flash"
+LLM_TEMPERATURE = 0.2   # deterministic - grounded in facts
+LLM_MAX_OUTPUT_TOKENS = 1100    # cost control - hard limit
+LLM_MAX_RESPONSE_LIMIT = 1000   # soft limit - llm guidance
 
 # Chunking config
 PDF_CHUNK_SIZE = 800

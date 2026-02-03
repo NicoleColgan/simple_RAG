@@ -2,6 +2,7 @@
 from pinecone import Pinecone, ServerlessSpec
 from config import PINECONE_API_KEY, PINECONE_INDEX_NAME, PINECONE_DIMENSION, PINECONE_METRIC, PINECONE_CLOUD, PINECONE_REGION
 import logging
+from models import MetaDataFilter
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ class VectorStore:
             self.pinecone_client.create_index(
                 name=PINECONE_INDEX_NAME,
                 dimension=PINECONE_DIMENSION,
-                metric="cosine",
+                metric=PINECONE_METRIC,
                 spec=ServerlessSpec(cloud=PINECONE_CLOUD, region=PINECONE_REGION)
             )
 
@@ -38,17 +39,37 @@ class VectorStore:
             ids = [chunk["id"] for chunk in chunks]
             existing_chunks = self.index.fetch(ids=ids)
             if existing_chunks.get("vectors", None):
-                logger.info(f"chunks already in pincone: {existing_chunks["vectors"].keys()}")  #tesssssssssst
+                logger.info(f"chunks already in pinecone: {existing_chunks["vectors"].keys()}")  #tesssssssssst
             return [chunk for chunk in chunks if chunk["id"] not in existing_chunks.get("vectors", {})] 
         except Exception as e:
             logger.warning(f"Failed to fetch existing vectors from pinecone: {e}")
             return chunks
     
-    #  def query(self, query_vector: list[float], top_k: int = 5) -> list[dict]:
-    #     """Query Pinecone for similar vectors"""
-    #     results = self.index.query(
-    #         vector=query_vector,
-    #         top_k=top_k,
-    #         include_metadata=True
-    #     )
-    #     return results.get("matches", [])
+    def get_similar(self, vector: list[float], metadata_filter: MetaDataFilter | None):
+        """Similarity Search against Pinecone vector db"""
+        try:
+            pinecone_filter = None
+            if metadata_filter:
+                pinecone_filter = self._create_pinecone_filter(metadata_filter)
+            results = self.index.query(
+                vector=vector,
+                top_k=5,    # currently not much in the db so keep it low to avoid getting irrelevant data
+                include_metadata=True,
+                filter=pinecone_filter
+            )
+
+            # filter out irrelevant chunks
+            MIN_SIMILARITY = 0.7
+            similar_results = [result for result in results["matches"] if result["score"] >= MIN_SIMILARITY]
+
+            return similar_results
+        except Exception as e:
+            logger.error(f"Error querying pinecone db: {e}", exc_info=True)
+            raise
+
+    def _create_pinecone_filter(self, metadata_filter: MetaDataFilter):
+        return {
+            metadata_filter.key: {
+                f"${metadata_filter.operation}": metadata_filter.value
+            }
+        }

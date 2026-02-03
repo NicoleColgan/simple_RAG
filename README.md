@@ -8,6 +8,7 @@ A production-ready Retrieval-Augmented Generation (RAG) system built on Google C
 
 - **Backend**: Python, FastAPI (async)
 - **Embeddings**: Vertex AI (text-embedding-004)
+- **LLM**: Vertex AI (Gemini 1.5 Flash)
 - **Vector Store**: Pinecone (serverless)
 - **Storage**: Google Cloud Storage (GCS)
 - **Deployment**: Cloud Run (planned)
@@ -25,9 +26,10 @@ A production-ready Retrieval-Augmented Generation (RAG) system built on Google C
 
 **API Endpoints**
 ```http
-POST /ingest    # Upload and process documents
-POST /query     # Query the knowledge base
-GET  /health    # Health check
+POST /ingest        # Upload and process documents
+POST /query         # Query with structured JSON response
+POST /query_stream  # Query with streaming response
+GET  /health        # Health check
 ```
 
 ### Phase 2: Agentic Orchestration 🚧
@@ -279,6 +281,183 @@ RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 - **Dimensions**: 768
 
 ---
+
+## Query & Retrieval Pipeline
+
+### Overview
+
+The query endpoint uses RAG (Retrieval-Augmented Generation) to provide grounded answers by combining vector search with LLM generation.
+
+### Request Format
+
+**Standard Query Endpoint:**
+```http
+POST /query
+Content-Type: application/json
+
+{
+  "query": "What is LangChain?",
+  "metadata_filter": {
+    "key": "filename",
+    "operation": "eq",
+    "value": "langchain_docs.pdf"
+  }
+}
+```
+
+**Streaming Query Endpoint:**
+```bash
+# Use -N flag to see streaming output
+curl -N -X POST http://localhost:8000/query_stream \
+  -H "Content-Type: application/json" \
+  -d '{"query": "what is langchain?"}'
+```
+
+### Query Flow
+
+```
+User Query
+  ↓
+Pydantic Validation (StringConstraints: strip whitespace, minimum length)
+  ↓
+Embed Query (Vertex AI text-embedding-004)
+  ↓
+Vector Search (Pinecone) + Optional Metadata Filtering
+  ↓
+Retrieve Top-K Chunks (k=5)
+  ↓
+Filter by Similarity (> 70%)
+  ↓
+Construct Prompt (Question + Context)
+  ↓
+LLM Generation (Gemini 1.5 Flash via Vertex AI)
+  ↓
+Structured JSON Response
+```
+
+### Request Validation
+
+**Query Model:**
+- Uses `StringConstraints` to strip whitespace and enforce minimum length
+- Validates input before processing
+
+**Metadata Filter (Optional):**
+- Defined as a Pydantic model
+- **Key**: Must be one of `text`, `filename`, or `gcs_uri` (metadata fields stored in Pinecone)
+- **Operation**: Either `eq` (equals) or `ne` (not equals)
+- **Value**: Free-text string to match against the specified field
+
+### Vector Search
+
+**Configuration:**
+```python
+top_k = 5              # Retrieve top 5 chunks (optimal for small databases)
+threshold = 0.70       # Filter chunks with similarity score > 70%
+```
+
+**Process:**
+1. Generate embedding from user query using Vertex AI `text-embedding-004`
+2. Query Pinecone with embedding + optional metadata filter
+3. Filter out irrelevant chunks by only accepting scores > 70%
+4. Pass retrieved chunks as context to LLM
+
+**Metadata Filtering Example:**
+```python
+# Pinecone filter syntax
+filter = {"filename": {"$eq": "specific_doc.pdf"}}  # Exact match
+filter = {"text": {"$ne": "unwanted_text"}}        # Not equal
+```
+
+### LLM Configuration
+
+**Model:** Gemini 1.5 Flash (via Vertex AI)
+
+**Generation Config:**
+```python
+generation_config = {
+    "temperature": 0.2,           # Low temperature for factual, deterministic responses
+    "max_output_tokens": 1100,    # Prevents LLM from rambling and controls cost
+    "response_mime_type": "application/json",
+    "response_schema": schema     # Enforce structured JSON output
+}
+```
+
+**Response Schema:**
+
+The schema defines the JSON structure the LLM must return:
+
+```python
+RESPONSE_SCHEMA = {
+            "type": "object",
+            "description": "json response schema for model",
+            "properties": {
+                "response": {
+                    "type": "string",
+                    "description": "Answer to the users question based on the context",
+                    "nullable": False,
+                    "maxLength": LLM_MAX_RESPONSE_LIMIT,  # soft limit - guidance for llm
+                    "example": "Langchain is a framework for building your app with LLMs"
+                },
+                ...
+                }
+            },
+            "required": ["response", "sources", "confidence"]
+        }
+```
+
+**Schema Features:**
+- **Type validation**: Ensures correct data types
+- **Length constraints**: `maxLength` prevents excessively long responses
+- **Nullable fields**: Marks optional fields with `nullable: True`
+- **Examples**: Provides few-shot examples to guide the LLM
+- **Required fields**: Enforces mandatory fields
+
+### Response Handling
+
+**Non-Streaming (`/query`):**
+1. Call `generate_content()` with prompt and generation config
+2. Deserialize LLM response from JSON string to dict
+3. Unpack to Pydantic response model
+4. Return structured JSON to user
+
+**Example Response:**
+```json
+{
+  "answer": "LangChain is a framework for developing applications powered by language models...",
+  "sources": ["langchain_docs.pdf"]
+}
+```
+
+**Streaming (`/query_stream`):**
+1. Call `generate_content_stream()` for streaming response
+2. Return iterable Generator object
+3. Loop through each chunk in `main.py`
+4. Return via FastAPI `StreamingResponse` object (Server-Sent Events)
+5. Client sees incremental results in real-time
+
+**Benefits of Streaming:**
+- Lower perceived latency (results appear immediately)
+- Better UX for long responses
+- Client can display partial results while generation continues
+
+### Modularization
+
+The query pipeline is organized into modular services:
+
+```
+services/
+├── prompts.py         # Response schemas and prompt templates
+├── embeddings.py      # Vertex AI embedding & LLM calls
+├── vectorstore.py     # Pinecone query operations
+├── storage.py         # GCS operations
+└── document_processor.py  # Text extraction & chunking
+```
+
+**Benefits:**
+- Clear separation of concerns
+- Easier testing and maintenance
+- Reusable components across endpoints
+- Simplified main.py endpoint logic
 
 ## Key Learnings
 

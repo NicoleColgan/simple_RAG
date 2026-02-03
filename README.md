@@ -423,8 +423,11 @@ RESPONSE_SCHEMA = {
 **Example Response:**
 ```json
 {
-  "answer": "LangChain is a framework for developing applications powered by language models...",
-  "sources": ["langchain_docs.pdf"]
+  "response": "LangChain is a framework designed to simplify the development of applications that leverage large language models (LLMs). It provides a unified framework for managing tasks and abstracts the complexity associated with directly integrating LLMs into an application. It is a versatile framework for building applications that efficiently utilize LLMs.",
+  "sources": [
+    "f1.pdf"
+  ],
+  "confidence": 1
 }
 ```
 

@@ -19,6 +19,6 @@ class QueryRequest(BaseModel):
     metadata_filter: MetaDataFilter | None = None
 
 class QueryResponse(BaseModel):
-    response: str = Field(description="Model response to user query using context")
-    sources: list = Field(description="Files used to answer this question")
-    confidence: float = Field(description="Models confidence in its answer")
+    response: str
+    sources: list
+    confidence: float

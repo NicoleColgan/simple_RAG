@@ -1,1 +1,1 @@
-from . import storage, document_processor, embeddings, vectorstore, prompts
+from . import storage, document_processor, vectorstore, prompts, vertex_ai_service

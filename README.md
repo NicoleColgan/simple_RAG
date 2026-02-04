@@ -450,7 +450,7 @@ The query pipeline is organized into modular services:
 ```
 services/
 ├── prompts.py         # Response schemas and prompt templates
-├── embeddings.py      # Vertex AI embedding & LLM calls
+├── vertex_ai_service.py      # Vertex AI embedding & LLM calls
 ├── vectorstore.py     # Pinecone query operations
 ├── storage.py         # GCS operations
 └── document_processor.py  # Text extraction & chunking

@@ -1,4 +1,4 @@
-"""VertexAI embeddings"""
+"""VertexAI services"""
 from config import EMBEDDING_BATCH_SIZE, EMBEDDING_MODEL, GCP_PROJECT_ID, GCP_LOCATION, LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_OUTPUT_TOKENS
 from vertexai.language_models import TextEmbeddingModel
 from google.cloud import aiplatform
@@ -9,7 +9,7 @@ import json
 
 logger = logging.getLogger(__name__)
 
-class Embeddings:
+class VertexAIService:
     def __init__(self):
         try:
             aiplatform.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)  # set up vertexai client

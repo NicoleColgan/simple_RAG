@@ -308,9 +308,7 @@ Content-Type: application/json
 **Streaming Query Endpoint:**
 ```bash
 # Use -N flag to see streaming output
-curl -N -X POST http://localhost:8000/query_stream \
-  -H "Content-Type: application/json" \
-  -d '{"query": "what is langchain?"}'
+curl -N -X POST http://localhost:8000/query_stream -H "Content-Type: application/json" -d "{\"query\": \"What is langchain?\"}"
 ```
 
 ### Query Flow
@@ -571,6 +569,12 @@ gcloud run services replace service.yaml
 
 **Health Check**
 Once deployed, verify the service is live: https://simple-rag-service-735784896762.europe-west1.run.app/health
+> Note: you can still use the FastAPI docs endpoint to make testing the endpoints easy: https://simple-rag-service-735784896762.europe-west1.run.app/docs#/default/ingest_ingest_post
+
+Try sending a post request to one of the endpoints
+```bash
+curl -N -X POST https://simple-rag-service-735784896762.europe-west1.run.app/query_stream -H "Content-Type: application/json" -d "{\"query\": \"What is langchain?\"}"
+```
 
 ---
 

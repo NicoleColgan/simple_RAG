@@ -26,6 +26,7 @@ LLM_MODEL = "gemini-2.5-flash"
 LLM_TEMPERATURE = 0.2   # deterministic - grounded in facts
 LLM_MAX_OUTPUT_TOKENS = 1100    # cost control - hard limit
 LLM_MAX_RESPONSE_LIMIT = 1000   # soft limit - llm guidance
+LLM_TOPK = 40   # hard cut off - only consider most likely k words
 
 # Chunking config
 PDF_CHUNK_SIZE = 800

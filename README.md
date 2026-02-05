@@ -374,11 +374,13 @@ filter = {"text": {"$ne": "unwanted_text"}}        # Not equal
 ```python
 generation_config = {
     "temperature": 0.2,           # Low temperature for factual, deterministic responses
+    "top_k": 40                   # Only use most likely k words - hard limit
     "max_output_tokens": 1100,    # Prevents LLM from rambling and controls cost
     "response_mime_type": "application/json",
     "response_schema": schema     # Enforce structured JSON output
 }
 ```
+> Note: Google docs recommend tuning temperate or top-p but not both
 
 **Response Schema:**
 

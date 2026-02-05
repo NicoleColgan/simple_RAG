@@ -308,9 +308,7 @@ Content-Type: application/json
 **Streaming Query Endpoint:**
 ```bash
 # Use -N flag to see streaming output
-curl -N -X POST http://localhost:8000/query_stream \
-  -H "Content-Type: application/json" \
-  -d '{"query": "what is langchain?"}'
+curl -N -X POST http://localhost:8000/query_stream -H "Content-Type: application/json" -d "{\"query\": \"What is langchain?\"}"
 ```
 
 ### Query Flow
@@ -376,11 +374,13 @@ filter = {"text": {"$ne": "unwanted_text"}}        # Not equal
 ```python
 generation_config = {
     "temperature": 0.2,           # Low temperature for factual, deterministic responses
+    "top_k": 40                   # Only use most likely k words - hard limit
     "max_output_tokens": 1100,    # Prevents LLM from rambling and controls cost
     "response_mime_type": "application/json",
     "response_schema": schema     # Enforce structured JSON output
 }
 ```
+> Note: Google docs recommend tuning temperate or top-p but not both
 
 **Response Schema:**
 
@@ -450,7 +450,7 @@ The query pipeline is organized into modular services:
 ```
 services/
 ├── prompts.py         # Response schemas and prompt templates
-├── embeddings.py      # Vertex AI embedding & LLM calls
+├── vertex_ai_service.py      # Vertex AI embedding & LLM calls
 ├── vectorstore.py     # Pinecone query operations
 ├── storage.py         # GCS operations
 └── document_processor.py  # Text extraction & chunking
@@ -461,6 +461,124 @@ services/
 - Easier testing and maintenance
 - Reusable components across endpoints
 - Simplified main.py endpoint logic
+
+--
+
+## Containerisation
+```cmd
+docker build -t "simple-rag" .    
+docker run --rm -p 8000:8000 -v "${PWD}/rag-service-account.json:/app/rag-service-account.json:ro" --env-file .env simple-rag:latest
+```
+Mount the service key as read-only and inject the env file at runtime. This keeps our secrets completely out of the image so they can't be leaked or stolen if the image is shared
+
+### Docker Architecture & Security
+
+- **Multi-stage Build:** We use a multi-stage build for efficiency and security. Think of each stage as a temporary "mini-computer" that exists only to do its specific task. When we hit a new `FROM` statement, the previous computer shuts down, but Docker lets us reach back into its "hard drive" to grab only the finished files we need. This keeps the final image tiny and removes build tools (compilers, etc.) that aren't needed in production.
+- **Hardened Base Images:** We use `dhi.io/python:3-debian12-dev` for building and `dhi.io/python:3-debian12` for running. 
+    - **Debian 12** is the current stable standard, ensuring high compatibility for Python libraries.
+    - **Hardened Images** are pre-scanned to have nearly zero security vulnerabilities (CVEs).
+    - The **-dev** version has the "muscles" (compilers/pip) needed to install libraries as the root user, while the final image is locked down for safety.
+- **Dependency Optimization:** We use the `--user` flag to install libraries into a specific "suitcase" folder (`.local`) that is easy to move between stages. We use `--no-cache-dir` to keep the build stage small. 
+    > **Does this matter in multi-stage?** Yes! Even though the builder stage is thrown away, a smaller builder stage makes the build process faster, uses less RAM, and saves disk space on your laptop or CI/CD server while it's working.
+- **Clean Runtime Environment:** The final stage uses a fresh `/app` directory and runs as a restricted `nonroot` user. This means even if the app is compromised, the attacker has no "Admin" rights and no shell access.
+- **Path Mapping:** Because we "teleported" our libraries to a non-standard directory (`/home/nonroot/.local`), we use `ENV PATH` to tell Python where to find them. The `$PATH` part ensures we add to the search list rather than replacing it.
+- **Network Binding:** We run Uvicorn with `--host 0.0.0.0`. 
+    - **Why?** Inside a container, `127.0.0.1` means "listen only to myself." `0.0.0.0` is a "catch-all" that tells the container to accept requests from the outside (your computer).
+- **Fixed Port Mapping:** We explicitly lock Uvicorn to `--port 8000`. This ensures that our `docker run -p 8000:8000` command always has a reliable "bridge" to the app inside.
+
+---
+
+## Deploying to cloud run
+
+**What is Cloud Run?**
+Cloud Run is a managed compute platform that allows you to run containers without worrying about maintaining servers. It automatically scales up and down based on traffic—even to zero when the service is idle.
+
+**Why Cloud Run for a RAG app?**
+* **True Pay-Per-Use**: In the default "Request-based billing" mode, you are only charged when your container is actually processing a request (i.e., when someone calls your endpoint) plus a tiny bit of startup/shutdown time. You don't pay while the service is sitting idle.
+* **Security**: Natural integration with Google Secret Manager and IAM (Identity and access management)
+* **Scaling**: RAG apps can be memory-intensive. Cloud run allows you to precisely allocate CPU and RAM. We used 2GiB RAM which is perfect for avoiding `Out of Memory` errors for processing PDFs, and 2 CPUs to ensure the service can handle concurrent requests without lagging (not implemented yet)
+
+### 1. Infrastructure Setup
+
+**Initialise Gcloud**
+```bash
+# Login to your Google account
+gcloud auth login
+
+# Set your project ID
+gcloud config set project simple-rag-485411
+```
+
+**Create Artifact Registry**
+Create a Docker repository in the `europe-west1` (Belgium) region to store the Docker image
+```bash
+gcloud artifacts repositories create my-rag-repo --repository-format=docker --location=europe-west1 --description="Docker repository for rag app"
+```
+
+### 2. Containerisation and Registry
+
+**Build the Image**
+Build image for `linux/amd64` to ensure compatibility with Google's server architecture. This is usually the same format Windows uses, but it's better to specify it explicitly. You can check the architecture with `docker image inspect`.
+```bash
+docker build --platform linux/amd64 -t europe-west1-docker.pkg.dev/simple-rag-485411/my-rag-repo/simple-rag:v1 .
+```
+
+**Authenticate Docker and Push**
+Since Docker will be interacting with the registry (not gcloud), we need to authenticate Docker.
+The command below configures Docker to use gcloud credentials when pushing to europe-west1-docker.pkg.dev.
+```bash
+# Authenticate Docker with GCP
+gcloud auth configure-docker europe-west1-docker.pkg.dev
+
+# Push your image to the registry
+docker push europe-west1-docker.pkg.dev/simple-rag-485411/my-rag-repo/simple-rag:v1
+```
+
+### 3. Secret Management
+
+Make sure you give your service account **Vertex AI User** and **Secret Manager Secret Accessor** roles.
+
+**Create Pinecone API Key Secret**
+We use the `-n` flag to prevent adding a hidden newline (`\n`) to the secret, which would break authentication.
+`--data-file=-` means read from standard input (where your key is echoed).
+```bash
+echo -n "YOUR_PINECONE_KEY" | gcloud secrets create PINECONE_API_KEY --data-file=-
+```
+> **Note:** Even with the `-n` flag, `\r\n` characters were sometimes read from the secret. Added `.strip()` in [`config.py`](config.py) as a defensive measure to handle any whitespace. Always use `.strip()` when reading secrets to prevent authentication failures.
+
+**Note on Google Credentials**
+Locally, we use the `.env` file to specify the service key path and place our JSON file in the root directory. When we initialize our Vertex AI library, it looks for this value and authenticates the service. For GCP, we don't do this. When the Vertex AI library doesn't find the credentials file, it checks the metadata server (which every Cloud Run service has). Since we attached our service account to the service, it returns an auto-rotating token based on that account, which authenticates our app. This approach is better for production because you don't have to store the service key file as a secret (less risk), tokens auto-rotate (better security), and deployment is simplified (no need to mount secret files).
+
+### 4. Deployment
+
+**Deploy to Cloud Run**
+Notice we only specify one `--port`. Google's load balancer handles public traffic (HTTPS/443) and forwards it to the container's internal port.
+```bash
+gcloud run deploy simple-rag-service --image europe-west1-docker.pkg.dev/simple-rag-485411/my-rag-repo/simple-rag:v2 --platform managed --region europe-west1 --allow-unauthenticated --port 8000 --memory 2Gi --cpu 2 --timeout 1000 --service-account="simple-rag-service-account@simple-rag-485411.iam.gserviceaccount.com" --update-secrets="PINECONE_API_KEY=PINECONE_API_KEY:latest"
+```
+
+### 5. Maintenance and Backup
+
+**Export Configuration**
+Save the "DNA" of your service to a YAML file. If the service is ever deleted, you can recreate it instantly.
+```bash
+# Create service file
+gcloud run services describe simple-rag-service --format export > service.yaml 
+
+# Recreate service from backup
+gcloud run services replace service.yaml
+```
+
+**Health Check**
+Once deployed, verify the service is live: https://simple-rag-service-735784896762.europe-west1.run.app/health
+> Note: you can still use the FastAPI docs endpoint to make testing the endpoints easy: https://simple-rag-service-735784896762.europe-west1.run.app/docs#/default/ingest_ingest_post
+
+Try sending a post request to one of the endpoints
+```bash
+curl -N -X POST https://simple-rag-service-735784896762.europe-west1.run.app/query_stream -H "Content-Type: application/json" -d "{\"query\": \"What is langchain?\"}"
+```
+
+---
 
 ## Key Learnings
 

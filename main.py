@@ -7,7 +7,7 @@ import logging
 from services.storage import StorageService
 from models import IngestResponse, QueryRequest, QueryResponse
 from services.document_processor import DocumentProcessor
-from services.embeddings import Embeddings
+from services.vertex_ai_service import VertexAIService
 from services.vectorstore import VectorStore
 from config import LOGGING_LEVEL, lOG_FORMAT
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 try:
     # Initialise services 
     gcs_storage = StorageService()
-    embeddings = Embeddings()
+    vertex_ai_service = VertexAIService()
     vectorstore = VectorStore()
 except Exception as e:
     logger.error(f"Failed to initialise services: {e}", exc_info=True)
@@ -72,7 +72,7 @@ async def ingest(files: list[UploadFile] = File(...)):
     try:
         all_chunks = vectorstore.filter_existing_vectors(all_chunks)
         if all_chunks:
-            vectors = embeddings.embed_chunks_in_batches(all_chunks)
+            vectors = vertex_ai_service.embed_chunks_in_batches(all_chunks)
             vectorstore.upload_to_pinecone(vectors) 
     except Exception as e:
         logger.error(f"Failed to store chunks: {e}", exc_info=True)
@@ -88,7 +88,7 @@ async def ingest(files: list[UploadFile] = File(...)):
 @app.post("/query")
 def query(query_request: QueryRequest):
     # convert query to embedding
-    vector = embeddings.get_single_embedding(query_request.query)
+    vector = vertex_ai_service.get_single_embedding(query_request.query)
 
     # search pinecone for similar items
     similar = vectorstore.get_similar(vector, query_request.metadata_filter)
@@ -100,13 +100,13 @@ def query(query_request: QueryRequest):
             confidence=0.0
         )
     
-    answer = embeddings.get_answer(similar, query_request.query)
+    answer = vertex_ai_service.get_answer(similar, query_request.query)
 
     return QueryResponse(**answer)
 
 @app.post("/query_stream")
 def streamed_query(query_request: QueryRequest):
-    vector = embeddings.get_single_embedding(query_request.query)
+    vector = vertex_ai_service.get_single_embedding(query_request.query)
 
     similar = vectorstore.get_similar(vector, query_request.metadata_filter)
 
@@ -118,7 +118,7 @@ def streamed_query(query_request: QueryRequest):
         )
 
     def stream_generator():
-        for chunk in embeddings.get_answer(similar, query_request.query, stream=True):
+        for chunk in vertex_ai_service.get_answer(similar, query_request.query, stream=True):
             if chunk.text:
                 yield chunk.text   
 

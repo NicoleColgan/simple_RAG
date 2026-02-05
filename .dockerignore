@@ -1,0 +1,19 @@
+# --- Security ---
+.env
+rag-service-account.json
+# *.key
+# *.pem -- ignore for now
+
+# --- Bloat: Folders that make the image too big ---
+venv/
+my_env/
+.git/
+.gitignore
+
+# --- RAG Data: Keep these out so the image stays "Generic" ---
+documents/
+
+# --- Housekeeping ---
+README.md
+**/__pycache__/
+.DS_Store

@@ -1,5 +1,5 @@
-"""VertexAI embeddings"""
-from config import EMBEDDING_BATCH_SIZE, EMBEDDING_MODEL, GCP_PROJECT_ID, GCP_LOCATION, LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_OUTPUT_TOKENS
+"""VertexAI services"""
+from config import EMBEDDING_BATCH_SIZE, EMBEDDING_MODEL, GCP_PROJECT_ID, GCP_LOCATION, LLM_MODEL, LLM_TEMPERATURE, LLM_MAX_OUTPUT_TOKENS, LLM_TOPK
 from vertexai.language_models import TextEmbeddingModel
 from google.cloud import aiplatform
 import logging
@@ -9,7 +9,7 @@ import json
 
 logger = logging.getLogger(__name__)
 
-class Embeddings:
+class VertexAIService:
     def __init__(self):
         try:
             aiplatform.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)  # set up vertexai client
@@ -69,6 +69,7 @@ class Embeddings:
                     response_mime_type="application/json",
                     response_schema=RESPONSE_SCHEMA,
                     temperature=LLM_TEMPERATURE,
+                    top_k=LLM_TOPK,
                     max_output_tokens=LLM_MAX_OUTPUT_TOKENS
                 ),
                 stream=stream

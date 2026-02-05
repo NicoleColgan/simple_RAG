@@ -1,13 +1,9 @@
 """Class to store whole files in gcs"""
-import os
-from config import SERVICE_ACCOUNT_KEY, BUCKET_NAME
+from config import BUCKET_NAME
 import logging
 from google.cloud import storage
 
 logger = logging.getLogger(__name__)
-
-# is this the best way to do this?
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_KEY  # path is relative to main
 
 class StorageService:
     def __init__(self):

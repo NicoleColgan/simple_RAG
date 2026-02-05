@@ -486,6 +486,94 @@ Mount the service key as read-only and inject the env file at runtime. This keep
     - **Why?** Inside a container, `127.0.0.1` means "listen only to myself." `0.0.0.0` is a "catch-all" that tells the container to accept requests from the outside (your computer).
 - **Fixed Port Mapping:** We explicitly lock Uvicorn to `--port 8000`. This ensures that our `docker run -p 8000:8000` command always has a reliable "bridge" to the app inside.
 
+---
+
+## Deploying to cloud run
+
+**What is Cloud Run?**
+Cloud Run is a managed compute platform that allows you to run containers without worrying about maintaining servers. It automatically scales up and down based on traffic—even to zero when the service is idle.
+
+**Why Cloud Run for a RAG app?**
+* **True Pay-Per-Use**: In the default "Request-based billing" mode, you are only charged when your container is actually processing a request (i.e., when someone calls your endpoint) plus a tiny bit of startup/shutdown time. You don't pay while the service is sitting idle.
+* **Security**: Natural integration with Google Secret Manager and IAM (Identity and access management)
+* **Scaling**: RAG apps can be memory-intensive. Cloud run allows you to precisely allocate CPU and RAM. We used 2GiB RAM which is perfect for avoiding `Out of Memory` errors for processing PDFs, and 2 CPUs to ensure the service can handle concurrent requests without lagging (not implemented yet)
+
+### 1. Infrastructure Setup
+
+**Initialise Gcloud**
+```bash
+# Login to your Google account
+gcloud auth login
+
+# Set your project ID
+gcloud config set project simple-rag-485411
+```
+
+**Create Artifact Registry**
+Create a Docker repository in the `europe-west1` (Belgium) region to store the Docker image
+```bash
+gcloud artifacts repositories create my-rag-repo --repository-format=docker --location=europe-west1 --description="Docker repository for rag app"
+```
+
+### 2. Containerisation and Registry
+
+**Build the Image**
+Build image for `linux/amd64` to ensure compatibility with Google's server architecture. This is usually the same format Windows uses, but it's better to specify it explicitly. You can check the architecture with `docker image inspect`.
+```bash
+docker build --platform linux/amd64 -t europe-west1-docker.pkg.dev/simple-rag-485411/my-rag-repo/simple-rag:v1 .
+```
+
+**Authenticate Docker and Push**
+Since Docker will be interacting with the registry (not gcloud), we need to authenticate Docker.
+The command below configures Docker to use gcloud credentials when pushing to europe-west1-docker.pkg.dev.
+```bash
+# Authenticate Docker with GCP
+gcloud auth configure-docker europe-west1-docker.pkg.dev
+
+# Push your image to the registry
+docker push europe-west1-docker.pkg.dev/simple-rag-485411/my-rag-repo/simple-rag:v1
+```
+
+### 3. Secret Management
+
+Make sure you give your service account **Vertex AI User** and **Secret Manager Secret Accessor** roles.
+
+**Create Pinecone API Key Secret**
+We use the `-n` flag to prevent adding a hidden newline (`\n`) to the secret, which would break authentication.
+`--data-file=-` means read from standard input (where your key is echoed).
+```bash
+echo -n "YOUR_PINECONE_KEY" | gcloud secrets create PINECONE_API_KEY --data-file=-
+```
+> **Note:** Even with the `-n` flag, `\r\n` characters were sometimes read from the secret. Added `.strip()` in [`config.py`](config.py) as a defensive measure to handle any whitespace. Always use `.strip()` when reading secrets to prevent authentication failures.
+
+**Note on Google Credentials**
+Locally, we use the `.env` file to specify the service key path and place our JSON file in the root directory. When we initialize our Vertex AI library, it looks for this value and authenticates the service. For GCP, we don't do this. When the Vertex AI library doesn't find the credentials file, it checks the metadata server (which every Cloud Run service has). Since we attached our service account to the service, it returns an auto-rotating token based on that account, which authenticates our app. This approach is better for production because you don't have to store the service key file as a secret (less risk), tokens auto-rotate (better security), and deployment is simplified (no need to mount secret files).
+
+### 4. Deployment
+
+**Deploy to Cloud Run**
+Notice we only specify one `--port`. Google's load balancer handles public traffic (HTTPS/443) and forwards it to the container's internal port.
+```bash
+gcloud run deploy simple-rag-service --image europe-west1-docker.pkg.dev/simple-rag-485411/my-rag-repo/simple-rag:v2 --platform managed --region europe-west1 --allow-unauthenticated --port 8000 --memory 2Gi --cpu 2 --timeout 1000 --service-account="simple-rag-service-account@simple-rag-485411.iam.gserviceaccount.com" --update-secrets="PINECONE_API_KEY=PINECONE_API_KEY:latest"
+```
+
+### 5. Maintenance and Backup
+
+**Export Configuration**
+Save the "DNA" of your service to a YAML file. If the service is ever deleted, you can recreate it instantly.
+```bash
+# Create service file
+gcloud run services describe simple-rag-service --format export > service.yaml 
+
+# Recreate service from backup
+gcloud run services replace service.yaml
+```
+
+**Health Check**
+Once deployed, verify the service is live: https://simple-rag-service-735784896762.europe-west1.run.app/health
+
+---
+
 ## Key Learnings
 
 ### FastAPI File Uploads

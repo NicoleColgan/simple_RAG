@@ -8,3 +8,4 @@ google-cloud-storage==3.8.0
 google-cloud-aiplatform==1.134.0
 pinecone==8.0.0
 python-dotenv==1.2.1
+dotenv==0.9.9

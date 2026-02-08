@@ -38,6 +38,42 @@ Why? Browsers block scripts from one origin (Port 5173) from talking to another 
 
 ---
 
+## Dockerizing the UI
+
+### 1. The Multi-Stage Build (The "Construction" vs. "Storefront" logic)
+
+- The Build Stage: To create a React app, you need "heavy machinery" like the Node runtime, NPM for dependencies, and compilers for TS/JSX. We use these to turn our raw source code into a dist/ folder.
+- Why drop the source code? We don't need CSS or Source Code in the final phase because the compiler has already bundled and minified everything into tiny, browser-ready files. Keeping the raw source code in the final image is a security risk and wastes space.
+- Layer Caching: By copying package.json and running npm install before copying the rest of the code, Docker caches the dependencies. If the code changes but the libraries don't, Docker skips the 5-minute install and finishes in seconds.
+
+* When you run your build, Vite takes all your React components and css and converts them to static files. The entry point the the static `index.html` file.
+* The browser is the one executing the UI updates (like `useState`). Nginx just hands the files to the browser like a delivery service
+* We can techincally use the Node image to host the site to, infact we do this in dev when running `npm run dev` but in production, thats not great. ITs better to use a high performance web server like Nginx.
+* **Performance**: Nginx is a high-performance web server written in C. It is purpose-built to handle thousands of concurrent connections with a tiny memory footprint.
+* **Security**: Nginx has a much smaller "attack surface" than Node. Because it doesn't execute code—it only moves files to the browser—it is significantly harder to exploit.
+* **Built-in Features**: By using Nginx, we get "production-ready" features for free, such as:
+  - Compression (Gzip): Shrinks file sizes for faster loading.
+  - Caching: Tells browsers to save assets locally to save bandwidth.
+  - Rate Limiting: Protects the site from being overwhelmed by too many requests.
+
+### 2. The Production Stage (The "Nginx" phase)
+
+- Switching to Nginx: Once the build is finished, we no longer need Node.js. We switch to a lightweight Nginx image because it is purpose-built to serve static files (HTML/JS/CSS) extremely fast.
+- How does Nginx know what to do? Nginx doesn't "run" the code like Python or Node does. It just sits there like a librarian. When a user visits your URL, Nginx says, "I have those files right here in /usr/share/nginx/html," and hands them to the browser. The browser is actually the one that "runs" the React app.
+
+* The "Clean Slate" Final Phase: When the Dockerfile hits the second `FROM` instruction, Docker completely wipes the environment. It discards the Node.js runtime, the `node_modules` folder, and all your raw source code. Only the finished, compiled assets are "plucked" from the build stage and moved into the Nginx image.
+* We move the build to `/usr/share/nginx/html` because that is exactly where Nginx is pre-configured to look for files to serve.
+
+### 3. Hardened Security & Non-Root
+
+- Config: We used a Hardened Image (DHI). This means security experts already configured the logs, worker processes, and user permissions.
+- Since the container runs as a non-root user (User 65532) for security, it cannot use "privileged" ports like 80. It is pre-configured to listen on 8080.
+- Mapping: Because the container uses 8080, we map our local port to match:
+
+```bash
+docker run -p 8080:8080 simple-rag-frontend:latest
+```
+
 ## 🧠 Key Technical Concepts
 
 ### 🔄 The "Async" Frontend vs. "Sync" Backend

@@ -40,7 +40,11 @@ Why? Browsers block scripts from one origin (Port 5173) from talking to another 
 
 ## Dockerizing the UI
 
-### 1. The Multi-Stage Build (The "Construction" vs. "Storefront" logic)
+### 1. Create `.dockerignore`
+
+Before the build starts, Docker checks this file to ignore "local junk" like node_modules, .git, and IDE settings. This speeds up the build process, prevents sensitive local files from leaking, and ensures the image stays lean and professional.
+
+### 2. The Multi-Stage Build (The "Construction" vs. "Storefront" logic)
 
 - The Build Stage: To create a React app, you need "heavy machinery" like the Node runtime, NPM for dependencies, and compilers for TS/JSX. We use these to turn our raw source code into a dist/ folder.
 - Why drop the source code? We don't need CSS or Source Code in the final phase because the compiler has already bundled and minified everything into tiny, browser-ready files. Keeping the raw source code in the final image is a security risk and wastes space.
@@ -56,7 +60,7 @@ Why? Browsers block scripts from one origin (Port 5173) from talking to another 
   - Caching: Tells browsers to save assets locally to save bandwidth.
   - Rate Limiting: Protects the site from being overwhelmed by too many requests.
 
-### 2. The Production Stage (The "Nginx" phase)
+### 3. The Production Stage (The "Nginx" phase)
 
 - Switching to Nginx: Once the build is finished, we no longer need Node.js. We switch to a lightweight Nginx image because it is purpose-built to serve static files (HTML/JS/CSS) extremely fast.
 - How does Nginx know what to do? Nginx doesn't "run" the code like Python or Node does. It just sits there like a librarian. When a user visits your URL, Nginx says, "I have those files right here in /usr/share/nginx/html," and hands them to the browser. The browser is actually the one that "runs" the React app.
@@ -64,7 +68,7 @@ Why? Browsers block scripts from one origin (Port 5173) from talking to another 
 * The "Clean Slate" Final Phase: When the Dockerfile hits the second `FROM` instruction, Docker completely wipes the environment. It discards the Node.js runtime, the `node_modules` folder, and all your raw source code. Only the finished, compiled assets are "plucked" from the build stage and moved into the Nginx image.
 * We move the build to `/usr/share/nginx/html` because that is exactly where Nginx is pre-configured to look for files to serve.
 
-### 3. Hardened Security & Non-Root
+### 4. Hardened Security & Non-Root
 
 - Config: We used a Hardened Image (DHI). This means security experts already configured the logs, worker processes, and user permissions.
 - Since the container runs as a non-root user (User 65532) for security, it cannot use "privileged" ports like 80. It is pre-configured to listen on 8080.
@@ -73,6 +77,49 @@ Why? Browsers block scripts from one origin (Port 5173) from talking to another 
 ```bash
 docker run -p 8080:8080 simple-rag-frontend:latest
 ```
+
+## Deploying to GCP
+
+### 1. Build and Push
+
+```bash
+docker build --platform linux/amd64 -t europe-west1-docker.pkg.dev/simple-rag-485411/my-rag-repo/simple-rag-frontend:v1 .
+```
+
+Push:
+
+```bash
+docker push europe-west1-docker.pkg.dev/simple-rag-485411/my-rag-repo/simple-rag-frontend:v1
+```
+
+### 2. Deployment Configuration
+
+- **Memory (512Mi)**: Frontend is just Nginx serving static files. It needs significantly less RAM than the Python backend.
+- **CPU (1)**: Nginx is incredibly efficient and does not require heavy compute power.
+- **Timeout (300)**: This limits how long Nginx takes to send site files. It does not affect how long the React app can wait for the Backend API to respond.
+- **Service Account**: Not required for the frontend as it doesn't need to authenticate with internal Google services or Secrets.
+
+```bash
+gcloud run deploy simple-rag-frontend --image europe-west1-docker.pkg.dev/simple-rag-485411/my-rag-repo/simple-rag-frontend:v1 --platform managed --region europe-west1 --allow-unauthenticated --port 8080 --memory 512Mi --cpu 1 --timeout 300
+```
+
+Updates: To update the image, you can simply go to the service in gcp and click update edit and deploy new revision
+
+> **Note**: Updated the API base URL to target the deployed production service and configured the backend CORS policy to permit requests from the frontend's Cloud Run origin.
+
+# Create service backup
+
+```bash
+gcloud run services describe simple-rag-frontend --format export > service.yaml
+```
+
+# Recreate service from backup
+
+```bash
+gcloud run services replace service.yaml
+```
+
+---
 
 ## 🧠 Key Technical Concepts
 
@@ -106,6 +153,8 @@ The handleUpload function processes a ChangeEvent<HTMLInputElement>.
 2. Start the frontend: `npm run dev`
 3. Upload a PDF/TXT via the Ingest button (optional - we already have files stored).
 4. Once the success alert appears, ask a question in the text area to verify the RAG retrieval.
+
+---
 
 ## Implementation
 

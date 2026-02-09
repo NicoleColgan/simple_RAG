@@ -10,6 +10,7 @@ from services.document_processor import DocumentProcessor
 from services.vertex_ai_service import VertexAIService
 from services.vectorstore import VectorStore
 from config import LOGGING_LEVEL, lOG_FORMAT
+from fastapi.middleware.cors import CORSMiddleware
 
 # Configure logging
 logging.basicConfig(level=LOGGING_LEVEL, format=lOG_FORMAT)
@@ -26,6 +27,18 @@ except Exception as e:
 
 app = FastAPI()
 
+# Enable CORS to allow ui to call api
+# origins = [
+#     "https://simple-rag-frontend-735784896762.europe-west1.run.app/",
+#     "http://localhost:8000"
+# ]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],    # easier to allow all origins for now
+    allow_credentials=True,
+    allow_methods=["*"],    # post, get etc
+    allow_headers=["*"] # all headers like content type
+)
 @app.get("/")
 def default():
     logger.info("Default endpoint")

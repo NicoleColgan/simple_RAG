@@ -11,11 +11,14 @@ function App() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query }),
-      });
+      const response = await fetch(
+        "https://simple-rag-service-735784896762.europe-west1.run.app/query",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: query }),
+        },
+      );
       const data = await response.json();
       setAnswer(data.response);
     } catch (error) {

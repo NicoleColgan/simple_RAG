@@ -1,6 +1,6 @@
 # Simple RAG: Production AI on Google Cloud
 
-A full-stack, cloud-native Retrieval-Augmented Generation (RAG) platform. This system allows users to upload documents (PDF/TXT) to a private knowledge base and query them using Gemini 1.5 Flash, with all infrastructure hosted securely on GCP.
+A full-stack, cloud-native Retrieval-Augmented Generation (RAG) platform. This system allows users to upload documents (PDF/TXT) to a private knowledge base and query them using Gemini 2.5 Flash, with all infrastructure hosted securely on GCP.
 
 ---
 
@@ -21,7 +21,7 @@ graph LR
     Backend -->|Embeddings| VertexAI[Vertex AI text-embedding-004]
     Backend -->|Vector Search| Pinecone[(Pinecone Vector DB)]
     Backend -->|Source Storage| GCS[(Google Cloud Storage)]
-    Backend -->|LLM| Gemini[Gemini 1.5 Flash]
+    Backend -->|LLM| Gemini[Gemini 2.5 Flash]
 ```
 
 ---

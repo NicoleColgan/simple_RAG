@@ -8,7 +8,7 @@ A production-ready Retrieval-Augmented Generation (RAG) system built on Google C
 
 - **Backend**: Python, FastAPI (async)
 - **Embeddings**: Vertex AI (text-embedding-004)
-- **LLM**: Vertex AI (Gemini 1.5 Flash)
+- **LLM**: Vertex AI (Gemini 2.5 Flash)
 - **Vector Store**: Pinecone (serverless)
 - **Storage**: Google Cloud Storage (GCS)
 - **Deployment**: Cloud Run (planned)
@@ -365,7 +365,7 @@ Filter by Similarity (> 70%)
   ↓
 Construct Prompt (Question + Context)
   ↓
-LLM Generation (Gemini 1.5 Flash via Vertex AI)
+LLM Generation (Gemini 2.5 Flash via Vertex AI)
   ↓
 Structured JSON Response
 ```
@@ -410,7 +410,7 @@ filter = {"text": {"$ne": "unwanted_text"}}        # Not equal
 
 ### LLM Configuration
 
-**Model:** Gemini 1.5 Flash (via Vertex AI)
+**Model:** Gemini 2.5 Flash (via Vertex AI)
 
 **Generation Config:**
 

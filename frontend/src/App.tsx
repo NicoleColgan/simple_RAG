@@ -1,26 +1,53 @@
 import { useState, type ChangeEvent } from "react";
 
 function App() {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState<string, JSX.Element>("");
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState("");
   const [ingesting, setIngesting] = useState(false);
+
+  const sleep = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms));
 
   const askQuestion = async () => {
     if (!query) return;
     setLoading(true);
 
     try {
-      const response = await fetch(
-        "https://simple-rag-service-735784896762.europe-west1.run.app/query",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: query }),
-        },
+      // const response = await fetch(
+      //   "https://simple-rag-service-735784896762.europe-west1.run.app/query",
+      //   {
+      //     method: "POST",
+      //     headers: { "Content-Type": "application/json" },
+      //     body: JSON.stringify({ query: query }),
+      //   },
+      // );
+      // const data = await response.json();
+
+      // mock the response
+      await sleep(3000);
+      setAnswer(
+        <span>
+          This is now mocked because I dont want to pay for services im not
+          using (: check out my{" "}
+          <a
+            href="https://github.com/NicoleColgan/simple_RAG"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Github Repo
+          </a>{" "}
+          or{" "}
+          <a
+            href="https://www.linkedin.com/in/nicole-colgan-638871220/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Linkedin
+          </a>
+          !
+        </span>,
       );
-      const data = await response.json();
-      setAnswer(data.response);
     } catch (error) {
       console.error("Something went wrong contacting the server: ", error);
       setAnswer("Oops, something went wrong");
@@ -29,38 +56,44 @@ function App() {
     }
   };
   const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    // const files = e.target.files;
+    // if (!files || files.length === 0) return;
 
+    // setIngesting(true);
+    // const formData = new FormData();
+
+    // // Loop through files and append to the 'files' key your FastAPI expects
+    // for (let i = 0; i < files.length; i++) {
+    //   formData.append("files", files[i]);
+    // }
+
+    // try {
+    //   const response = await fetch("http://localhost:8000/ingest", {
+    //     method: "POST",
+    //     body: formData,
+    //   });
+    //   const data = await response.json();
+
+    //   if (response.ok) {
+    //     alert(
+    //       `Success!\nFiles: ${data.filenames.join(", ")}\nChunks ingested: ${data.chunks_ingested}`,
+    //     );
+    //   } else {
+    //     alert(`Error uploading files: ${data.error_msg || "Unknown Error"}`);
+    //   }
+    // } catch (error) {
+    //   alert("No response from server - make sure it's running");
+    // } finally {
+    //   setIngesting(false);
+    //   // reset input
+    //   e.target.value = "";
+    // }
+
+    // mock response
     setIngesting(true);
-    const formData = new FormData();
-
-    // Loop through files and append to the 'files' key your FastAPI expects
-    for (let i = 0; i < files.length; i++) {
-      formData.append("files", files[i]);
-    }
-
-    try {
-      const response = await fetch("http://localhost:8000/ingest", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await response.json();
-
-      if (response.ok) {
-        alert(
-          `Success!\nFiles: ${data.filenames.join(", ")}\nChunks ingested: ${data.chunks_ingested}`,
-        );
-      } else {
-        alert(`Error uploading files: ${data.error_msg || "Unknown Error"}`);
-      }
-    } catch (error) {
-      alert("No response from server - make sure it's running");
-    } finally {
-      setIngesting(false);
-      // reset input
-      e.target.value = "";
-    }
+    await sleep(3000);
+    alert("file successfully uploaded!");
+    setIngesting(false);
   };
 
   return (

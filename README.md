@@ -2,6 +2,14 @@
 
 A full-stack, cloud-native Retrieval-Augmented Generation (RAG) platform. This system allows users to upload documents (PDF/TXT) to a private knowledge base and query them using Gemini 1.5 Flash, with all infrastructure hosted securely on GCP.
 
+---
+
+## User Interface
+
+![UI](./images/ui.png)
+
+---
+
 ## 🏗️ System Architecture
 
 The project is split into two independent, containerized microservices:

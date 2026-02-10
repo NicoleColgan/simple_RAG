@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent } from "react";
 
 function App() {
-  const [query, setQuery] = useState<string, JSX.Element>("");
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState("");
   const [ingesting, setIngesting] = useState(false);
@@ -27,26 +27,7 @@ function App() {
       // mock the response
       await sleep(3000);
       setAnswer(
-        <span>
-          This is now mocked because I dont want to pay for services im not
-          using (: check out my{" "}
-          <a
-            href="https://github.com/NicoleColgan/simple_RAG"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Github Repo
-          </a>{" "}
-          or{" "}
-          <a
-            href="https://www.linkedin.com/in/nicole-colgan-638871220/"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Linkedin
-          </a>
-          !
-        </span>,
+        "This is a mocked response because I dont want to pay for services I dont need (: Check out my Github repo or Linkedin!",
       );
     } catch (error) {
       console.error("Something went wrong contacting the server: ", error);
@@ -90,6 +71,7 @@ function App() {
     // }
 
     // mock response
+    console.log(e);
     setIngesting(true);
     await sleep(3000);
     alert("file successfully uploaded!");
